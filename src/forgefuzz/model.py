@@ -45,6 +45,17 @@ class Graph:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
+    @property
+    def edge_count(self) -> int:
+        return sum(len(node.inputs) for node in self.nodes)
+
+    @property
+    def depth(self) -> int:
+        depths = {name: 0 for name in self.inputs}
+        for node in self.nodes:
+            depths[node.id] = 1 + max(depths[name] for name in node.inputs)
+        return max((depths[name] for name in self.outputs), default=0)
+
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "Graph":
         return cls(
@@ -61,6 +72,7 @@ class ProgramArtifact:
     compile_command: tuple[str, ...] | None = None
     run_command: tuple[str, ...] = ()
     environment: dict[str, str] = field(default_factory=dict)
+    metadata: dict[str, JsonValue] = field(default_factory=dict)
 
 
 class FailureKind(str, Enum):

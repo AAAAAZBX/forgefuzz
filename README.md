@@ -19,6 +19,7 @@ API/约束目录 ──> generate/mutate ──> 通用 Graph IR ──> adapter
 ```
 
 - `model.py`：可序列化的通用 Graph IR 和执行结果；
+- `generate.py`：基于 `OpSpec` 的确定性随机 DAG 组合；
 - `plugin.py`：新语言只需实现的 `LanguageAdapter`；
 - `runner.py`：独立进程组、硬超时、日志捕获；
 - `scheduler.py`：基于新特征与新失败的简化 AFL 风格反馈；
@@ -93,3 +94,5 @@ PYTHONPATH=src python -m forgefuzz run \
 ```
 
 具体说明见 [examples/PYTORCH_EXAMPLE.md](examples/PYTORCH_EXAMPLE.md)。
+
+随机图生成算法及最小用法见 [docs/GRAPH_GENERATION.md](docs/GRAPH_GENERATION.md)。

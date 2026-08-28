@@ -7,6 +7,7 @@ from dataclasses import replace
 from importlib import resources
 from pathlib import Path
 
+from forgefuzz.generate import OpSpec, RandomGraphGenerator
 from forgefuzz.model import ExecutionResult, FailureKind, Graph, Node, ProgramArtifact, TensorType
 from forgefuzz.plugin import LanguageAdapter
 
@@ -20,11 +21,19 @@ class __ADAPTER_CLASS__(LanguageAdapter):
         catalog_file = resources.files(__package__).joinpath("api_catalog.json")
         self.catalog = json.loads(catalog_file.read_text(encoding="utf-8"))
         self.operations = tuple(self.catalog["operations"])
+        specs = tuple(
+            OpSpec(
+                name, int(rule["arity"]), dtypes=tuple(rule.get("dtypes", ())),
+            )
+            for name, rule in self.catalog["operations"].items()
+        )
+        self.generator = RandomGraphGenerator(specs, min_nodes=3, max_nodes=8)
 
     def generate(self, rng: random.Random) -> Graph:
         tensor = TensorType("float32", (4,))
-        node = Node("n0", rng.choice(self.operations), ("x", "y"), tensor)
-        return Graph({"x": tensor, "y": tensor}, (node,), (node.id,), {"adapter": self.name})
+        return self.generator.generate(
+            rng, {"x": tensor, "y": tensor}, {"adapter": self.name},
+        )
 
     def mutate(self, graph: Graph, rng: random.Random) -> Graph:
         index = rng.randrange(len(graph.nodes))
@@ -48,23 +57,30 @@ class __ADAPTER_CLASS__(LanguageAdapter):
 
     def emit(self, graph: Graph, output_dir: Path) -> ProgramArtifact:
         output_dir.mkdir(parents=True, exist_ok=True)
-        node = graph.nodes[0]
         expressions = {
-            "add": "[a + b for a, b in zip(x, y)]",
-            "mul": "[a * b for a, b in zip(x, y)]",
-            "maximum": "[max(a, b) for a, b in zip(x, y)]",
+            "add": "[a + b for a, b in zip({0}, {1})]",
+            "mul": "[a * b for a, b in zip({0}, {1})]",
+            "maximum": "[max(a, b) for a, b in zip({0}, {1})]",
         }
-        source = "\n".join([
+        values = {"x": "x", "y": "y"}
+        lines = [
             "import json",
-            f"# forgefuzz-api: {node.op}",
             "x = [1.0, -2.0, 3.0, 4.0]",
             "y = [2.0, 3.0, -1.0, 0.5]",
-            f"actual = {expressions[node.op]}",
-            "print(json.dumps({'actual': actual}))",
-        ]) + "\n"
+        ]
+        for node in graph.nodes:
+            left, right = (values[name] for name in node.inputs)
+            expression = expressions[node.op].format(left, right)
+            lines.extend((f"# forgefuzz-api: {node.op}", f"{node.id} = {expression}"))
+            values[node.id] = node.id
+        lines.append(f"print(json.dumps({{'actual': {values[graph.outputs[0]]}}}))")
+        source = "\n".join(lines) + "\n"
         entrypoint = output_dir / "program.py"
         entrypoint.write_text(source, encoding="utf-8")
-        return ProgramArtifact(entrypoint, (entrypoint,), run_command=(sys.executable, str(entrypoint)))
+        return ProgramArtifact(
+            entrypoint, (entrypoint,), run_command=(sys.executable, str(entrypoint)),
+            metadata={"operations": [node.op for node in graph.nodes]},
+        )
 
     def oracle(self, artifact: ProgramArtifact, result: ExecutionResult) -> ExecutionResult:
         if not result.success or result.run is None:
@@ -80,7 +96,5 @@ class __ADAPTER_CLASS__(LanguageAdapter):
 
     def observe(self, artifact: ProgramArtifact, result: ExecutionResult):
         yield f"result:{result.kind.value}"
-        source = artifact.entrypoint.read_text(encoding="utf-8")
-        for operation in self.operations:
-            if f"# forgefuzz-api: {operation}" in source:
-                yield f"api:{operation}"
+        for operation in artifact.metadata["operations"]:
+            yield f"api:{operation}"

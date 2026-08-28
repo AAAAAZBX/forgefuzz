@@ -6,6 +6,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
+from ..generate import OpSpec, RandomGraphGenerator
 from ..model import ExecutionResult, FailureKind, Graph, Node, ProgramArtifact, TensorType
 from ..plugin import LanguageAdapter
 
@@ -16,16 +17,20 @@ class PyTorchAdapter(LanguageAdapter):
     name = "pytorch"
     binary_ops = ("add", "sub", "mul")
     unary_ops = ("relu", "sigmoid")
+    op_specs = tuple(
+        OpSpec(name, arity, dtypes=("float32",), ranks=(2,))
+        for name, arity in (
+            ("add", 2), ("sub", 2), ("mul", 2), ("relu", 1), ("sigmoid", 1),
+        )
+    )
+
+    def __init__(self, min_nodes: int = 3, max_nodes: int = 8):
+        self.generator = RandomGraphGenerator(self.op_specs, min_nodes, max_nodes)
 
     def generate(self, rng: random.Random) -> Graph:
         tensor = TensorType("float32", (4, 4))
-        nodes = (
-            Node("n0", rng.choice(self.binary_ops), ("x", "y"), tensor),
-            Node("n1", rng.choice(self.unary_ops), ("n0",), tensor),
-            Node("n2", rng.choice(self.binary_ops), ("n1", "y"), tensor),
-        )
-        return Graph(
-            {"x": tensor, "y": tensor}, nodes, ("n2",),
+        return self.generator.generate(
+            rng, {"x": tensor, "y": tensor},
             {"adapter": self.name, "input_seed": rng.randrange(2**31)},
         )
 
@@ -96,7 +101,13 @@ class PyTorchAdapter(LanguageAdapter):
         ]) + "\n"
         script = output_dir / "case.py"
         script.write_text(source, encoding="utf-8")
-        return ProgramArtifact(script, (script,), run_command=(sys.executable, str(script)))
+        return ProgramArtifact(
+            script, (script,), run_command=(sys.executable, str(script)),
+            metadata={
+                "node_count": len(graph.nodes), "edge_count": graph.edge_count,
+                "depth": graph.depth, "operations": [node.op for node in graph.nodes],
+            },
+        )
 
     def oracle(self, artifact: ProgramArtifact, result: ExecutionResult) -> ExecutionResult:
         if not result.success or result.run is None:
@@ -118,10 +129,10 @@ class PyTorchAdapter(LanguageAdapter):
 
     def observe(self, artifact: ProgramArtifact, result: ExecutionResult):
         yield f"result:{result.kind.value}"
-        source = artifact.entrypoint.read_text(encoding="utf-8")
-        for operation in (*self.binary_ops, *self.unary_ops):
-            if f"torch.{operation}(" in source:
-                yield f"api:{operation}"
+        yield f"graph:nodes:{artifact.metadata['node_count']}"
+        yield f"graph:depth:{artifact.metadata['depth']}"
+        for operation in artifact.metadata["operations"]:
+            yield f"api:{operation}"
         if result.run and result.run.ok:
             try:
                 payload = json.loads(result.run.log_tail.strip().splitlines()[-1])

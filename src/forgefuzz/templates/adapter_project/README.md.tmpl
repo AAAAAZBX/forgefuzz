@@ -27,7 +27,7 @@ python -m forgefuzz run \
 ## 从示例改造成真实语言
 
 1. 在 `api_catalog.json` 录入 API 签名和约束；
-2. `generate` 根据目录生成合法计算图；
+2. `generate` 默认通过 `RandomGraphGenerator` 随机组合 3–8 节点 DAG；
 3. `mutate` 实现节点、属性、shape、dtype 和输入值变异；
 4. `validate` 在调用编译器前过滤静态非法 case；
 5. `emit` 生成完整源码，并返回编译、运行命令；

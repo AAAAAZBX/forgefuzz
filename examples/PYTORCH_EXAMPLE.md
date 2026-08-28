@@ -3,9 +3,9 @@
 这个样例演示如何用 ForgeFuzz 建立一条完整但精简的真实框架测试链路：
 
 ```text
-生成三节点 Graph → 生成 PyTorch 程序 → eager 参考执行
-                                      → torch.compile 目标执行
-                                      → 比较输出 → 收集反馈
+随机生成 3–8 节点 DAG → 生成 PyTorch 程序 → eager 参考执行
+                                           → torch.compile 目标执行
+                                           → 比较输出 → 收集反馈
 ```
 
 适配器源码位于 `src/forgefuzz/adapters/pytorch.py`。
@@ -69,12 +69,12 @@ PYTHONPATH=src python -m forgefuzz replay \
 
 ## 4. 样例包含的扩展点
 
-- `generate`：生成 `binary → unary → binary` 三节点图；
+- `generate`：从算子规格随机组合 3–8 节点、全节点存活的 DAG；
 - `mutate`：保持输入数量合法并替换算子；
 - `validate`：检查算子、参数数量和数据依赖；
 - `emit`：生成 eager 与 compiled 两条执行路径；
 - `oracle`：以 `max_abs_diff <= 1e-5` 判断结果；
-- `observe`：记录覆盖到的算子、后端和结果类型。
+- `observe`：记录图规模、深度、算子、后端和结果类型。
 
 ## 5. 扩展成自己的 PyTorch 测试体系
 

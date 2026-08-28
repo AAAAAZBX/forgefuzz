@@ -20,6 +20,7 @@ class CampaignConfig:
     iterations: int = 100
     seed: int = 0
     timeout_seconds: float = 30.0
+    fresh_probability: float = 0.25
 
 
 class Campaign:
@@ -99,16 +100,21 @@ class Campaign:
     def run(self) -> dict[str, int]:
         if self.config.iterations <= 0:
             raise ValueError("iterations must be positive")
+        if not 0.0 <= self.config.fresh_probability <= 1.0:
+            raise ValueError("fresh_probability must be between 0 and 1")
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
         stats = Counter(success=0, failure=0, interesting=0)
         queue = self.corpus.load_graphs()
         known_ids = {graph_id(graph) for graph in queue}
         for index in range(self.config.iterations):
-            if queue:
+            generate_fresh = not queue or self.rng.random() < self.config.fresh_probability
+            if not generate_fresh:
                 seed_graph = self.rng.choice(queue)
                 graph = self.rng.choice(self.mutators).mutate(seed_graph, self.rng)
+                stats["mutated"] += 1
             else:
                 graph = self.adapter.generate(self.rng)
+                stats["generated"] += 1
             case_dir = self.config.output_dir / "cases" / f"id_{index:06d}"
             case_dir.mkdir(parents=True, exist_ok=True)
             (case_dir / "graph.json").write_text(json.dumps(graph.to_dict(), indent=2), encoding="utf-8")
