@@ -64,3 +64,15 @@ forgefuzz run --adapter my_language --iterations 100 --output runs/first
 ```
 
 完整操作手册见 [从零搭建测试体系](docs/USER_GUIDE.md)，接口细节见 [新语言接入指南](docs/ADDING_A_LANGUAGE.md)，后续建设计划见 [docs/ROADMAP.md](docs/ROADMAP.md)。
+
+## PyTorch 样例
+
+仓库包含一个 eager 与 `torch.compile` 差分测试样例：
+
+```bash
+PYTHONPATH=src python -m forgefuzz run \
+  --adapter pytorch --iterations 10 --timeout 60 \
+  --output runs/pytorch-demo
+```
+
+具体说明见 [examples/PYTORCH_EXAMPLE.md](examples/PYTORCH_EXAMPLE.md)。

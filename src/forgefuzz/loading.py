@@ -4,10 +4,13 @@ import importlib
 from importlib import metadata
 from typing import Any
 
-from .adapters import PythonAdapter
+from .adapters import PyTorchAdapter, PythonAdapter
 from .plugin import LanguageAdapter
 
-BUILTIN_ADAPTERS: dict[str, type[LanguageAdapter]] = {"python": PythonAdapter}
+BUILTIN_ADAPTERS: dict[str, type[LanguageAdapter]] = {
+    "python": PythonAdapter,
+    "pytorch": PyTorchAdapter,
+}
 ENTRY_POINT_GROUP = "forgefuzz.adapters"
 
 
