@@ -1,0 +1,83 @@
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from enum import Enum
+from pathlib import Path
+from typing import Any
+
+JsonValue = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
+
+
+@dataclass(frozen=True, slots=True)
+class TensorType:
+    dtype: str
+    shape: tuple[int | str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Node:
+    id: str
+    op: str
+    inputs: tuple[str, ...]
+    output: TensorType
+    attributes: dict[str, JsonValue] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class Graph:
+    inputs: dict[str, TensorType]
+    nodes: tuple[Node, ...]
+    outputs: tuple[str, ...]
+    metadata: dict[str, JsonValue] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True, slots=True)
+class ProgramArtifact:
+    entrypoint: Path
+    files: tuple[Path, ...]
+    compile_command: tuple[str, ...] | None = None
+    run_command: tuple[str, ...] = ()
+    environment: dict[str, str] = field(default_factory=dict)
+
+
+class FailureKind(str, Enum):
+    SUCCESS = "success"
+    INVALID = "invalid"
+    EMIT_FAILURE = "emit_failure"
+    COMPILE_FAILURE = "compile_failure"
+    RUNTIME_FAILURE = "runtime_failure"
+    TIMEOUT = "timeout"
+    OUTPUT_MISMATCH = "output_mismatch"
+    INTERNAL_ERROR = "internal_error"
+
+
+@dataclass(frozen=True, slots=True)
+class ProcessResult:
+    command: tuple[str, ...]
+    returncode: int | None
+    duration_seconds: float
+    timed_out: bool
+    log_path: Path
+    log_tail: str
+
+    @property
+    def ok(self) -> bool:
+        return self.returncode == 0 and not self.timed_out
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionResult:
+    kind: FailureKind
+    stage: str
+    message: str = ""
+    compile: ProcessResult | None = None
+    run: ProcessResult | None = None
+    features: frozenset[str] = frozenset()
+    fingerprint: str | None = None
+
+    @property
+    def success(self) -> bool:
+        return self.kind is FailureKind.SUCCESS

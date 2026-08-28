@@ -1,0 +1,48 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+from .engine import Campaign, CampaignConfig
+from .loading import available_adapters, load_adapter
+from .scaffold import create_adapter_project
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="forgefuzz")
+    sub = parser.add_subparsers(dest="command", required=True)
+    run = sub.add_parser("run", help="run a fuzz campaign")
+    run.add_argument(
+        "--adapter", default="python",
+        help="builtin/entry-point name or module.path:AdapterClass",
+    )
+    run.add_argument("--iterations", type=int, default=10)
+    run.add_argument("--seed", type=int, default=0)
+    run.add_argument("--timeout", type=float, default=30.0)
+    run.add_argument("--output", type=Path, default=Path("runs/latest"))
+    init = sub.add_parser("init", help="create a standalone adapter project")
+    init.add_argument("directory", type=Path)
+    init.add_argument("--adapter-name", required=True)
+    sub.add_parser("adapters", help="list builtin and installed adapters")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    if args.command == "init":
+        path = create_adapter_project(args.directory, args.adapter_name)
+        print(f"created adapter project: {path}")
+        return 0
+    if args.command == "adapters":
+        for name, source in available_adapters():
+            print(f"{name}\t{source}")
+        return 0
+    adapter = load_adapter(args.adapter)
+    config = CampaignConfig(args.output, args.iterations, args.seed, args.timeout)
+    print(json.dumps(Campaign(adapter, config).run(), indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,14 @@
+import random
+
+from __PACKAGE_NAME__.adapter import __ADAPTER_CLASS__
+
+
+def test_generation_is_deterministic():
+    adapter = __ADAPTER_CLASS__()
+    assert adapter.generate(random.Random(7)) == adapter.generate(random.Random(7))
+
+
+def test_generated_graph_is_valid():
+    adapter = __ADAPTER_CLASS__()
+    graph = adapter.generate(random.Random(1))
+    assert list(adapter.validate(graph)) == []
