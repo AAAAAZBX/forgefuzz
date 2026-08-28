@@ -13,6 +13,10 @@ class TensorType:
     dtype: str
     shape: tuple[int | str, ...]
 
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "TensorType":
+        return cls(dtype=str(value["dtype"]), shape=tuple(value["shape"]))
+
 
 @dataclass(frozen=True, slots=True)
 class Node:
@@ -21,6 +25,14 @@ class Node:
     inputs: tuple[str, ...]
     output: TensorType
     attributes: dict[str, JsonValue] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "Node":
+        return cls(
+            id=str(value["id"]), op=str(value["op"]), inputs=tuple(value["inputs"]),
+            output=TensorType.from_dict(value["output"]),
+            attributes=dict(value.get("attributes", {})),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +44,14 @@ class Graph:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "Graph":
+        return cls(
+            inputs={name: TensorType.from_dict(kind) for name, kind in value["inputs"].items()},
+            nodes=tuple(Node.from_dict(node) for node in value["nodes"]),
+            outputs=tuple(value["outputs"]), metadata=dict(value.get("metadata", {})),
+        )
 
 
 @dataclass(frozen=True, slots=True)

@@ -44,6 +44,23 @@ pytest
 
 每个 case 都会保留 `graph.json`、生成程序、编译/运行日志和 `result.json`。`corpus/queue` 保存产生新反馈的输入，`corpus/failures` 按失败指纹去重归档。
 
+## 最小运行闭环
+
+```text
+生成 Graph → 执行并提取反馈 → interesting Graph 进入 corpus
+     ↑                                  ↓
+     └──── 从 corpus 选择并通过 GraphMutator 变异 ────┘
+```
+
+复现任意已保存 case：
+
+```bash
+PYTHONPATH=src python -m forgefuzz replay \
+  runs/demo/cases/id_000000 --adapter python
+```
+
+第三方可以继承 `GraphMutator` 增加结构化变异；如果不提供，框架自动使用 Adapter 自带的 `mutate`。
+
 ## 当前范围
 
 这是可运行的 MVP，不等同于完整 AFL++。当前反馈来自适配器提供的语义/结果特征；共享内存边覆盖、forkserver、确定性 mutation 阶段、崩溃最小化和多 worker 尚在路线图中。

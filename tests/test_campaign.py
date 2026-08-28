@@ -1,6 +1,8 @@
 import json
+import random
 from pathlib import Path
 
+from forgefuzz import Graph
 from forgefuzz.adapters import PythonAdapter
 from forgefuzz.engine import Campaign, CampaignConfig
 
@@ -23,3 +25,13 @@ def test_seed_is_deterministic(tmp_path: Path):
         Campaign(PythonAdapter(), CampaignConfig(output, iterations=3, seed=19)).run()
         graphs.append([(p.read_text()) for p in sorted((output / "cases").glob("*/graph.json"))])
     assert graphs[0] == graphs[1]
+
+
+def test_graph_roundtrip_and_replay(tmp_path: Path):
+    adapter = PythonAdapter()
+    graph = adapter.generate(random.Random(4))
+    restored = Graph.from_dict(graph.to_dict())
+    assert restored == graph
+    result = Campaign(adapter, CampaignConfig(tmp_path / "replay")).replay(restored)
+    assert result.success
+    assert (tmp_path / "replay/result.json").is_file()

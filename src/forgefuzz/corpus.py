@@ -38,6 +38,15 @@ class Corpus:
         self.queue.mkdir(parents=True, exist_ok=True)
         self.failures.mkdir(parents=True, exist_ok=True)
 
+    def load_graphs(self) -> list[Graph]:
+        graphs: list[Graph] = []
+        for path in sorted(self.queue.glob("*.json")):
+            try:
+                graphs.append(Graph.from_dict(json.loads(path.read_text(encoding="utf-8"))))
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                continue
+        return graphs
+
     def persist(self, case_dir: Path, graph: Graph, result: ExecutionResult, interesting: bool) -> None:
         summary = {
             "graph_id": graph_id(graph), "kind": result.kind.value, "stage": result.stage,

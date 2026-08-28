@@ -60,6 +60,13 @@ runs/pytorch-demo/
 python runs/pytorch-demo/cases/id_000000/program/case.py
 ```
 
+也可以通过框架重新执行保存的 Graph：
+
+```bash
+PYTHONPATH=src python -m forgefuzz replay \
+  runs/pytorch-demo/cases/id_000000 --adapter pytorch --timeout 60
+```
+
 ## 4. 样例包含的扩展点
 
 - `generate`：生成 `binary → unary → binary` 三节点图；

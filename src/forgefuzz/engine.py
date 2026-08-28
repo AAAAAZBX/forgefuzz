@@ -6,8 +6,9 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-from .corpus import Corpus, failure_fingerprint
+from .corpus import Corpus, failure_fingerprint, graph_id
 from .model import ExecutionResult, FailureKind, Graph
+from .mutation import AdapterMutator, GraphMutator
 from .plugin import LanguageAdapter
 from .runner import ProcessRunner
 from .scheduler import FeedbackScheduler
@@ -22,13 +23,17 @@ class CampaignConfig:
 
 
 class Campaign:
-    def __init__(self, adapter: LanguageAdapter, config: CampaignConfig):
+    def __init__(
+        self, adapter: LanguageAdapter, config: CampaignConfig,
+        mutators: tuple[GraphMutator, ...] | None = None,
+    ):
         self.adapter = adapter
         self.config = config
         self.rng = random.Random(config.seed)
         self.runner = ProcessRunner()
         self.scheduler = FeedbackScheduler(config.seed)
         self.corpus = Corpus(config.output_dir / "corpus")
+        self.mutators = mutators or (AdapterMutator(adapter),)
 
     def _execute(self, graph: Graph, case_dir: Path) -> ExecutionResult:
         errors = tuple(self.adapter.validate(graph))
@@ -82,20 +87,37 @@ class Campaign:
             )
         return ExecutionResult(result.kind, result.stage, result.message, result.compile, result.run, features, result.fingerprint)
 
+    def replay(self, graph: Graph) -> ExecutionResult:
+        """Execute one saved Graph without starting a campaign."""
+        case_dir = self.config.output_dir
+        case_dir.mkdir(parents=True, exist_ok=True)
+        (case_dir / "graph.json").write_text(json.dumps(graph.to_dict(), indent=2), encoding="utf-8")
+        result = self._execute(graph, case_dir)
+        self.corpus.persist(case_dir, graph, result, interesting=False)
+        return result
+
     def run(self) -> dict[str, int]:
         if self.config.iterations <= 0:
             raise ValueError("iterations must be positive")
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
         stats = Counter(success=0, failure=0, interesting=0)
-        graph: Graph | None = None
+        queue = self.corpus.load_graphs()
+        known_ids = {graph_id(graph) for graph in queue}
         for index in range(self.config.iterations):
-            graph = self.adapter.generate(self.rng) if graph is None else self.adapter.mutate(graph, self.rng)
+            if queue:
+                seed_graph = self.rng.choice(queue)
+                graph = self.rng.choice(self.mutators).mutate(seed_graph, self.rng)
+            else:
+                graph = self.adapter.generate(self.rng)
             case_dir = self.config.output_dir / "cases" / f"id_{index:06d}"
             case_dir.mkdir(parents=True, exist_ok=True)
             (case_dir / "graph.json").write_text(json.dumps(graph.to_dict(), indent=2), encoding="utf-8")
             result = self._execute(graph, case_dir)
             interesting = self.scheduler.is_interesting(result.features, result.fingerprint)
             self.corpus.persist(case_dir, graph, result, interesting)
+            if interesting and graph_id(graph) not in known_ids:
+                queue.append(graph)
+                known_ids.add(graph_id(graph))
             stats["success" if result.success else "failure"] += 1
             stats["interesting"] += int(interesting)
         summary = dict(stats)

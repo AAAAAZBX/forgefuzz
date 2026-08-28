@@ -2,6 +2,7 @@
 
 from .engine import Campaign, CampaignConfig
 from .model import ExecutionResult, FailureKind, Graph, Node, ProgramArtifact, TensorType
+from .mutation import GraphMutator
 from .plugin import LanguageAdapter
 
 __all__ = [
@@ -10,6 +11,7 @@ __all__ = [
     "ExecutionResult",
     "FailureKind",
     "Graph",
+    "GraphMutator",
     "LanguageAdapter",
     "Node",
     "ProgramArtifact",
