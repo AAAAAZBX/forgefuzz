@@ -2,6 +2,8 @@
 
 ForgeFuzz 是一个面向计算图程序的轻量、反馈驱动 Fuzz 框架。核心代码不依赖具体语言：Triton、AscendC、PyTorch、CUDA 或其他 DSL 都通过适配器接入。
 
+当前版本已经打通“约束目录 → 随机计算图 → 图变异/算子插入 → 独立项目生成 → 基线与等价变体批量执行 → Oracle 判定 → 反馈语料”的完整闭环，并提供 Python、NumPy 蜕变测试和 PyTorch eager/compile 差分测试三个后端。
+
 它借鉴了两个现有工程中已经验证过的通用设计：
 
 - `triton-fuzzer-main` 的语义模型、生成/发射/执行分层、进程隔离、超时、失败指纹、语料包和覆盖反馈；
@@ -12,10 +14,10 @@ ForgeFuzz 是一个面向计算图程序的轻量、反馈驱动 Fuzz 框架。�
 ## 架构
 
 ```text
-API/约束目录 ──> generate/mutate ──> 通用 Graph IR ──> adapter.emit
-                                                        │
-                                                        v
-语料队列 <── novelty/失败指纹 <── adapter.observe <── compile/run
+API/约束目录 -> generate/mutate -> 通用 Graph IR -> base + variants
+                                                     |
+                                                     v
+语料队列 <- novelty/失败指纹 <- oracle/observe <- emit/build/run
 ```
 
 - `model.py`：可序列化的通用 Graph IR 和执行结果；
@@ -25,6 +27,7 @@ API/约束目录 ──> generate/mutate ──> 通用 Graph IR ──> adapter
 - `scheduler.py`：基于新特征与新失败的简化 AFL 风格反馈；
 - `corpus.py`：测试用例、interesting queue 和失败归档；
 - `engine.py`：语言无关 campaign 主循环；
+- `MetamorphicVariant`：携带等价关系、变换证据与变体 Graph；
 - `adapters/python.py`：零依赖的参考适配器。
 
 ## 快速开始
@@ -32,7 +35,8 @@ API/约束目录 ──> generate/mutate ──> 通用 Graph IR ──> adapter
 不安装也可以从源码运行：
 
 ```bash
-PYTHONPATH=src python -m forgefuzz run --iterations 10 --seed 1 --output runs/demo
+$env:PYTHONPATH="src" # PowerShell；Linux/macOS 使用 PYTHONPATH=src
+python -m forgefuzz run --adapter numpy --iterations 10 --seed 1 --output runs/demo
 ```
 
 开发安装：
@@ -43,7 +47,7 @@ forgefuzz run --iterations 10 --output runs/demo
 pytest
 ```
 
-每个 case 都会保留 `graph.json`、生成程序、编译/运行日志和 `result.json`。`corpus/queue` 保存产生新反馈的输入，`corpus/failures` 按失败指纹去重归档。
+每个 case 都会保留 `graph.json`、`base/`、`variants/<变换 id>/`、变换记录、编译/运行日志和 `result.json`。`corpus/queue` 保存产生新反馈的输入，`corpus/failures` 按失败指纹去重归档。
 
 ## 最小运行闭环
 
@@ -62,9 +66,9 @@ PYTHONPATH=src python -m forgefuzz replay \
 
 第三方可以继承 `GraphMutator` 增加结构化变异；如果不提供，框架自动使用 Adapter 自带的 `mutate`。
 
-## 当前范围
+## 设计边界
 
-这是可运行的 MVP，不等同于完整 AFL++。当前反馈来自适配器提供的语义/结果特征；共享内存边覆盖、forkserver、确定性 mutation 阶段、崩溃最小化和多 worker 尚在路线图中。
+核心只负责协议、调度、进程隔离、归档和反馈；API 语义、约束、代码模板、工具链、容差和等价关系归 Adapter。这样新增语言不需要修改 Campaign。当前实现不是完整 AFL++；共享内存边覆盖、forkserver、崩溃最小化和多 worker 仍在路线图中。
 
 ## 为自己的语言生成独立项目
 
@@ -82,6 +86,8 @@ forgefuzz run --adapter my_language --iterations 100 --output runs/first
 ```
 
 完整操作手册见 [从零搭建测试体系](docs/USER_GUIDE.md)，接口细节见 [新语言接入指南](docs/ADDING_A_LANGUAGE.md)，后续建设计划见 [docs/ROADMAP.md](docs/ROADMAP.md)。
+
+仓库还包含项目级 skill：`.codex/skills/add-forgefuzz-adapter`。另一个 Codex agent 读完它即可按相同契约接入新语言，并完成必要验收。
 
 ## PyTorch 样例
 

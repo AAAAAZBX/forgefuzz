@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import random
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .corpus import Corpus, failure_fingerprint, graph_id
@@ -21,6 +21,7 @@ class CampaignConfig:
     seed: int = 0
     timeout_seconds: float = 30.0
     fresh_probability: float = 0.25
+    metamorphic_variants: int = 1
 
 
 class Campaign:
@@ -97,11 +98,54 @@ class Campaign:
         self.corpus.persist(case_dir, graph, result, interesting=False)
         return result
 
+    def _execute_metamorphic_case(self, graph: Graph, case_dir: Path) -> ExecutionResult:
+        """Run a base graph and its relation-preserving variants as one case."""
+        base_dir = case_dir / "base"
+        base_result = self._execute(graph, base_dir)
+        if not base_result.success or self.config.metamorphic_variants <= 0:
+            return base_result
+        base_artifact = self.adapter.emit(graph, base_dir / "program")
+        variants = list(self.adapter.metamorphic_variants(graph, self.rng))[
+            : self.config.metamorphic_variants
+        ]
+        features = set(base_result.features)
+        for variant in variants:
+            variant_dir = case_dir / "variants" / variant.id
+            variant_dir.mkdir(parents=True, exist_ok=True)
+            (variant_dir / "graph.json").write_text(
+                json.dumps(variant.graph.to_dict(), indent=2), encoding="utf-8",
+            )
+            (variant_dir / "transform.json").write_text(
+                json.dumps({"id": variant.id, "relation": variant.relation,
+                            "metadata": variant.metadata}, indent=2), encoding="utf-8",
+            )
+            variant_result = self._execute(variant.graph, variant_dir)
+            features.update(variant_result.features)
+            features.add(f"metamorphic:{variant.relation}")
+            if not variant_result.success:
+                return replace(variant_result, features=frozenset(features))
+            variant_artifact = self.adapter.emit(variant.graph, variant_dir / "program")
+            verdict = self.adapter.metamorphic_oracle(
+                base_artifact, base_result, variant, variant_artifact, variant_result,
+            )
+            features.update(verdict.features)
+            if not verdict.success:
+                fingerprint = verdict.fingerprint or failure_fingerprint(
+                    verdict.stage, f"{variant.relation}: {verdict.message}",
+                )
+                return replace(verdict, features=frozenset(features), fingerprint=fingerprint)
+        return ExecutionResult(
+            base_result.kind, base_result.stage, base_result.message,
+            base_result.compile, base_result.run, frozenset(features), base_result.fingerprint,
+        )
+
     def run(self) -> dict[str, int]:
         if self.config.iterations <= 0:
             raise ValueError("iterations must be positive")
         if not 0.0 <= self.config.fresh_probability <= 1.0:
             raise ValueError("fresh_probability must be between 0 and 1")
+        if self.config.metamorphic_variants < 0:
+            raise ValueError("metamorphic_variants must not be negative")
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
         stats = Counter(success=0, failure=0, interesting=0)
         queue = self.corpus.load_graphs()
@@ -118,7 +162,7 @@ class Campaign:
             case_dir = self.config.output_dir / "cases" / f"id_{index:06d}"
             case_dir.mkdir(parents=True, exist_ok=True)
             (case_dir / "graph.json").write_text(json.dumps(graph.to_dict(), indent=2), encoding="utf-8")
-            result = self._execute(graph, case_dir)
+            result = self._execute_metamorphic_case(graph, case_dir)
             interesting = self.scheduler.is_interesting(result.features, result.fingerprint)
             self.corpus.persist(case_dir, graph, result, interesting)
             if interesting and graph_id(graph) not in known_ids:

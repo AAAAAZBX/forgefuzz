@@ -78,7 +78,7 @@ class __ADAPTER_CLASS__(LanguageAdapter):
         entrypoint = output_dir / "program.py"
         entrypoint.write_text(source, encoding="utf-8")
         return ProgramArtifact(
-            entrypoint, (entrypoint,), run_command=(sys.executable, str(entrypoint)),
+            entrypoint, (entrypoint,), run_command=(sys.executable, str(entrypoint.resolve())),
             metadata={"operations": [node.op for node in graph.nodes]},
         )
 

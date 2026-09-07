@@ -102,7 +102,7 @@ class PyTorchAdapter(LanguageAdapter):
         script = output_dir / "case.py"
         script.write_text(source, encoding="utf-8")
         return ProgramArtifact(
-            script, (script,), run_command=(sys.executable, str(script)),
+            script, (script,), run_command=(sys.executable, str(script.resolve())),
             metadata={
                 "node_count": len(graph.nodes), "edge_count": graph.edge_count,
                 "depth": graph.depth, "operations": [node.op for node in graph.nodes],

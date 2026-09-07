@@ -21,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--iterations", type=int, default=10)
     run.add_argument("--seed", type=int, default=0)
     run.add_argument("--timeout", type=float, default=30.0)
+    run.add_argument("--metamorphic-variants", type=int, default=1)
     run.add_argument("--output", type=Path, default=Path("runs/latest"))
     replay = sub.add_parser("replay", help="replay a saved case or graph.json")
     replay.add_argument("case", type=Path)
@@ -54,7 +55,10 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"kind": result.kind.value, "stage": result.stage, "output": str(output)}, indent=2))
         return 0
     adapter = load_adapter(args.adapter)
-    config = CampaignConfig(args.output, args.iterations, args.seed, args.timeout)
+    config = CampaignConfig(
+        args.output, args.iterations, args.seed, args.timeout,
+        metamorphic_variants=args.metamorphic_variants,
+    )
     print(json.dumps(Campaign(adapter, config).run(), indent=2))
     return 0
 

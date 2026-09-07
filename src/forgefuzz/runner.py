@@ -31,24 +31,37 @@ class ProcessRunner:
         timed_out = False
         returncode: int | None = None
         with log_path.open("wb") as log:
+            windows = os.name == "nt"
             process = subprocess.Popen(
                 [str(item) for item in command], cwd=cwd, env=env,
                 stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
-                start_new_session=True,
+                start_new_session=not windows,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if windows else 0,
             )
             try:
                 returncode = process.wait(timeout=timeout_seconds)
             except subprocess.TimeoutExpired:
                 timed_out = True
-                try:
-                    os.killpg(process.pid, signal.SIGTERM)
-                    returncode = process.wait(timeout=2)
-                except (ProcessLookupError, subprocess.TimeoutExpired):
+                if windows:
                     try:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
+                        subprocess.run(
+                            ("taskkill", "/PID", str(process.pid), "/T", "/F"),
+                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, timeout=5, check=False,
+                        )
+                    except (OSError, subprocess.TimeoutExpired):
+                        process.kill()
                     returncode = process.wait()
+                else:
+                    try:
+                        os.killpg(process.pid, signal.SIGTERM)
+                        returncode = process.wait(timeout=2)
+                    except (ProcessLookupError, subprocess.TimeoutExpired):
+                        try:
+                            os.killpg(process.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        returncode = process.wait()
         data = log_path.read_bytes()[-65536:]
         return ProcessResult(
             tuple(str(x) for x in command), returncode, time.monotonic() - start,

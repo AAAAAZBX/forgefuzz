@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterable
 
-from .model import ExecutionResult, Graph, ProgramArtifact
+from .model import ExecutionResult, Graph, MetamorphicVariant, ProgramArtifact
 
 
 class LanguageAdapter(ABC):
@@ -40,3 +40,20 @@ class LanguageAdapter(ABC):
         output checking. Process failures have already been classified.
         """
         return result
+
+    def metamorphic_variants(
+        self, graph: Graph, rng: random.Random,
+    ) -> Iterable[MetamorphicVariant]:
+        """Produce relation-preserving graphs. The default disables this stage."""
+        return ()
+
+    def metamorphic_oracle(
+        self,
+        base_artifact: ProgramArtifact,
+        base_result: ExecutionResult,
+        variant: MetamorphicVariant,
+        variant_artifact: ProgramArtifact,
+        variant_result: ExecutionResult,
+    ) -> ExecutionResult:
+        """Compare a successful base/variant pair and return the pair verdict."""
+        return variant_result

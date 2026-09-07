@@ -66,6 +66,16 @@ class Graph:
 
 
 @dataclass(frozen=True, slots=True)
+class MetamorphicVariant:
+    """A graph that must preserve a declared relation with its base graph."""
+
+    id: str
+    relation: str
+    graph: Graph
+    metadata: dict[str, JsonValue] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
 class ProgramArtifact:
     entrypoint: Path
     files: tuple[Path, ...]

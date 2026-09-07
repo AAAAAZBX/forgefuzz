@@ -56,7 +56,7 @@ class PythonAdapter(LanguageAdapter):
         lines.append(f"print(json.dumps({expressions[graph.outputs[0]]}))")
         script = output_dir / "case.py"
         script.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        return ProgramArtifact(script, (script,), run_command=(sys.executable, str(script)))
+        return ProgramArtifact(script, (script,), run_command=(sys.executable, str(script.resolve())))
 
     def observe(self, artifact: ProgramArtifact, result: ExecutionResult):
         yield f"result:{result.kind.value}"

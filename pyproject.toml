@@ -14,6 +14,7 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+numpy = ["numpy>=1.24"]
 pytorch = ["torch>=2.1"]
 
 [project.scripts]

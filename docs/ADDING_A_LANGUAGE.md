@@ -1,6 +1,6 @@
 # 接入新语言或框架
 
-一个新后端应放在 `src/forgefuzz/adapters/<name>/`，并实现 `LanguageAdapter` 的五个阶段。
+内置后端放在 `src/forgefuzz/adapters/<name>/`；团队自己的后端建议用 `forgefuzz init` 创建独立包。它需要实现 `LanguageAdapter` 的基础阶段，并按需实现蜕变阶段。
 
 ## 1. 建立 API 与约束目录
 
@@ -24,9 +24,14 @@ class MyAdapter(LanguageAdapter):
     def validate(self, graph): ...     # 静态合法性检查
     def emit(self, graph, out): ...    # 模板填充，返回 ProgramArtifact
     def observe(self, artifact, result): ...  # 提取覆盖/新颖度
+    def metamorphic_variants(self, graph, rng): ... # 生成等价变体
+    def metamorphic_oracle(self, base_artifact, base_result,
+                           variant, variant_artifact, variant_result): ...
 ```
 
 `emit` 产生的程序必须可脱离 ForgeFuzz 单独重放。编译和运行所需命令放进 `ProgramArtifact`，不要在适配器中自行启动子进程。
+
+每个 `MetamorphicVariant` 必须声明稳定 id、关系名、变体 Graph 和变换证据。变体必须复用基线输入 seed；交换律、结合律等规则要先检查 dtype、溢出、NaN 和浮点精度前置条件。
 
 ## 3. 搭建测试环境
 

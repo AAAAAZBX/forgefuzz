@@ -32,9 +32,10 @@ python -m forgefuzz run \
 4. `validate` 在调用编译器前过滤静态非法 case；
 5. `emit` 生成完整源码，并返回编译、运行命令；
 6. `oracle` 比较目标输出与参考输出，判定 mismatch；
-7. `observe` 提取 API、IR pass、边覆盖或其他反馈特征。
+7. `metamorphic_variants` 生成等价图，`metamorphic_oracle` 比较基线与变体；
+8. `observe` 提取 API、IR pass、边覆盖或其他反馈特征。
 
-运行目录中的每个 `cases/id_xxxxxx/program` 都必须能够独立重放，这是适配器的基本契约。
+运行目录中的 `cases/id_xxxxxx/base/program` 与 `variants/*/program` 都必须能够独立重放，这是适配器的基本契约。
 
 ## 测试
 
