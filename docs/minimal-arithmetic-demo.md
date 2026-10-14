@@ -1,5 +1,7 @@
 # ForgeFuzz 最小算术蜕变闭环演示
 
+演讲时直接复制命令可使用[逐步命令清单](minimal-arithmetic-commands.md)，其中每组命令都附有中文注释。
+
 本演示在当前工作区执行真实 Triton-Ascend 和 AscendC 后端，流程是：
 
 `create → generate → emit（原程序＋蜕变程序）→ build → run → oracle → report`
