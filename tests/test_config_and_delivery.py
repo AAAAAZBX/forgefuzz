@@ -47,17 +47,44 @@ class ConfigValidationTests(unittest.TestCase):
 
 class DoctorScopeTests(unittest.TestCase):
     def test_triton_interpreter_does_not_require_ascend_or_npu(self):
-        config = load_config(overrides={"device": "interpreter"})
-        with patch("fuzz.doctor.subprocess.run") as run:
-            run.return_value.returncode = 0
-            run.return_value.stdout = "triton-ok\n"
-            run.return_value.stderr = ""
-            checks, healthy = run_doctor(config, backend="triton")
-        names = {item["name"] for item in checks}
-        self.assertNotIn("AscendC project", names)
-        self.assertNotIn("CANN", names)
-        self.assertNotIn("NPU device", names)
-        self.assertTrue(healthy)
+        # This scope test must work without a checkout of either real backend.
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            project = root / "triton"
+            package = project / "triton_ascend_fuzz"
+            package.mkdir(parents=True)
+            workflow = package / "workflow.py"
+            workflow.touch()
+            python = project / "python"
+            python.touch()  # The runtime probe below is mocked, never executed.
+            config = load_config(overrides={
+                "device": "interpreter",
+                "triton_root": str(project),
+                "triton_python": str(python),
+                "ascendc_root": str(root / "missing-ascendc"),
+                "ascend_cann_path": str(root / "missing-cann"),
+            })
+            with patch("fuzz.doctor.subprocess.run") as run, patch(
+                "fuzz.doctor.importlib.util.find_spec", return_value=object()
+            ):
+                run.return_value.returncode = 0
+                run.return_value.stdout = "triton-ok\n"
+                run.return_value.stderr = ""
+                checks, healthy = run_doctor(config, backend="triton")
+                run.assert_called_once()
+                self.assertEqual(run.call_args.args[0][0], str(python))
+                names = {item["name"] for item in checks}
+                self.assertNotIn("AscendC project", names)
+                self.assertNotIn("CANN", names)
+                self.assertNotIn("NPU device", names)
+                self.assertTrue(healthy, checks)
+
+                # Missing required Triton files must still be diagnosed.
+                workflow.unlink()
+                checks, healthy = run_doctor(config, backend="triton")
+                self.assertFalse(healthy)
+                self.assertFalse(next(c for c in checks if c["name"] == "Triton project")["ok"])
+
 
 
 class BundleDeliveryTests(unittest.TestCase):
